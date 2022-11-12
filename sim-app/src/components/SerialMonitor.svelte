@@ -1,17 +1,21 @@
 <script lang="ts">
     import type { ReadlineParser, SerialPort } from "serialport";
-    import { Button, TextField, Tooltip } from "smelte";
-    import { onDestroy, onMount } from "svelte";
+    import { Button, Select, TextField, Tooltip } from "smelte";
+    import { createEventDispatcher, onDestroy, onMount } from "svelte";
     import SerialConnectionSelector from "./SerialComponents/SerialConnectionSelector.svelte";
 
     // Configuration
-    export let maxHistory: number = 100000;
+    export let maxHistory: number = 10000;
     export let isDisplayOnly: boolean = false;
+
+    // Event forwarding
+    const dispatch = createEventDispatcher<{selectAndOpenSerialPort: {port: SerialPort, parser: ReadlineParser}, selectAndFailToOpenSerialPort: {portPath: string, error: Error}, serialPortClosing: {port: SerialPort, parser: ReadlineParser}}>();
 
     // Message Tracking
     let currentHistory: Array<{ msg: string, timestamp: string }> = [];
     let parser: ReadlineParser | undefined = undefined;
-    
+    let serialPort: SerialPort | undefined = undefined;
+
     // Scrolling
     let isLockedToBottom: boolean = true;
     let outputArea: Element;
@@ -21,6 +25,21 @@
     let isShowingTimestamps: boolean = false;
 
     // Send message
+    const newlineValueOptions = [
+        {
+            text: "CRLF",
+            value: "\c\n"
+        },
+        {
+            text: "LF",
+            value: "\n"
+        },
+        {
+            text: "No Endline",
+            value: ""
+        }
+    ];
+    let selectedNewlineValueOption: string = "\n";
     let messageToSend: string = "";
     let isFocused: boolean = false;
 
@@ -31,7 +50,7 @@
     function addToHistory(msg: string) {
         currentHistory.push({msg: "> " + msg, timestamp: "[" + new Date().toLocaleTimeString() + "] > " + msg });
         if (currentHistory.length > maxHistory) {
-            currentHistory.shift();
+            currentHistory = currentHistory.slice(maxHistory - 200);
         }
         currentHistory = currentHistory; // Svelte trick to force a redraw.
     }
@@ -44,12 +63,11 @@
         
         // If hitting enter
         if (event.key !== undefined && event.key == "Enter") {
-            parser.write(messageToSend, 'ascii', (err) => {
+            serialPort.write(messageToSend + '\n', 'ascii', (err) => {
                 if (err) {
                     addToHistory("ASHES FAILURE: Failed to send message, error: " + err.message);
                 }
                 else {
-                    console.log("Wrote data.");
                 }
             });
             messageToSend = ""; // Clear msg
@@ -61,15 +79,24 @@
      */
     function onSerialPortOpen(event: CustomEvent<{port: SerialPort, parser: ReadlineParser}>) {
         parser = event.detail.parser;
+        serialPort = event.detail.port;
         parser.on('data', onSerialData);
+
+        // Forward event
+        dispatch('selectAndOpenSerialPort', event.detail);
     }
 
     /**
      * Handles event when serial selector closes a connection
      */
-    function onSerialPortClose() {
+    function onSerialPortClose(event: CustomEvent) {
         parser.off('data', onSerialData);
         parser = undefined;
+        serialPort = undefined;
+
+        // Forward event
+        dispatch('serialPortClosing', event.detail);
+        console.log(event);
     }
 
     /**
@@ -82,7 +109,7 @@
         if (isMounted && isLockedToBottom) {
             outputArea.scroll( {top: outputArea.scrollHeight, behavior: 'auto'} );
         }
-        
+
     }
 
     // Keep track of mounting state so scrolling doesn't throw a
@@ -122,7 +149,7 @@
 </div>
 
 
-<div bind:this={outputArea} class="scrollbars overflow-y-scroll h-96">
+<div bind:this={outputArea} class="scrollbars overflow-y-scroll max-h-96">
     <pre>
         {#if isShowingTimestamps}
             {#each currentHistory as entry}
@@ -141,8 +168,17 @@
     <SerialConnectionSelector 
         on:selectAndOpenSerialPort={ onSerialPortOpen }
         on:serialPortClosing={ onSerialPortClose }
+        on:selectAndFailToOpenSerialPort={ (event) => { dispatch('selectAndFailToOpenSerialPort', event.detail); } }
         />
-    <TextField bind:focused={isFocused} bind:value={messageToSend} dense />
+    <div style="display: flex; flex-direction: row; align-items: center;">
+        <div class="flex-grow mr-1">
+            <TextField label="Send Message via Serial" bind:focused={isFocused} bind:value={messageToSend} dense />
+        </div>
+        <div class="w-36 ml-1">
+            <Select items={newlineValueOptions} bind:value={selectedNewlineValueOption} dense />
+        </div>
+    </div>
+    
 </div>
 {/if}
 

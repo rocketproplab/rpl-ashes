@@ -10,9 +10,12 @@
     let show = false;
 
     // Menu for routes
-    const menu = [
+    const toolsMenu = [
       { to: "/tools/serialmonitor", text: 'Serial Monitor' },
     ];
+    const hardwareEmulatorsMenu = [
+        { to: "/hardware-emulation/fuel-tank-valve", text: "Fuel Tank Valve" },
+    ]
 
     console.log("/tools/serialmonitor")
     console.log(currentRoute.path)
@@ -35,11 +38,11 @@
     </header>
 
     <NavigationDrawer  persistent={true} bind:show={show}>
-        <h6 class="ml-3">
+        <h6 class="ml-3 mt-3">
             Tools
         </h6>
-        <List items={menu}>
-            {#each menu as item}
+        <List items={toolsMenu}>
+            {#each toolsMenu as item}
             {#if currentRoute.path !== item.to}
             <Navigate to={item.to} >
                 <ListItem
@@ -61,6 +64,25 @@
         <h6 class="ml-3 pt-3">
             Hardware Emulators
         </h6>
+        <List items={hardwareEmulatorsMenu}>
+            {#each hardwareEmulatorsMenu as item}
+            {#if currentRoute.path !== item.to}
+            <Navigate to={item.to} >
+                <ListItem
+                        selected={currentRoute.path === item.to}
+                        {...item}
+                        dense
+                        />
+            </Navigate>
+            {:else}
+            <ListItem
+                    selected={currentRoute.path === item.to}
+                    {...item}
+                    dense
+                    />
+            {/if}
+            {/each}
+        </List>
     </NavigationDrawer>
 
     <div class="mt-16 mx-16">
